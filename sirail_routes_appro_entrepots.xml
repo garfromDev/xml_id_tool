@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="utf-8"?>
+<openerp>
+    <data>
+
+        <!-- ############## Route principale d'approvisionnement SIRAIL ############## -->
+        <record model="stock.location.route" id="stock_location_route_flux_nominal">
+            <field name="name">Flux d'appro SIRAIL</field>
+            <field name="active" eval="True"/>
+            <field name="sequence">10</field>
+            <field name="product_categ_selectable"/>
+            <field name="product_selectable"/>
+            <field name="warehouse_selectable" eval="True"/>
+            <field name="company_id"/>
+        </record>
+
+        <record model="procurement.rule" id="procurement_rule_be_to_prepa_stockage">
+            <field name="name">Buffer => Dispatch</field>
+            <field name="active" eval="False"/>
+            <field name="action">move</field>
+            <field name="location_id" ref="stock_location_sirail_dispatch"/>
+            <field name="warehouse_id"/>
+            <field name="route_id" ref="stock_location_route_flux_nominal"/>
+            <field name="group_propagation_option">none</field>
+            <field name="propagate" eval="True"/>
+            <field name="picking_type_id" ref="stock_picking_type_sirail_op_systeme"/>
+            <field name="procure_method">make_to_order</field>
+            <field name="auto_move" eval="True"/>
+            <field name="defer_picking_assign" eval="True"/>
+            <field name="location_src_id" ref="stock_location_sirail_buffer_entree"/>
+        </record>
+
+        <record model="procurement.rule" id="procurement_rule_dispatch_to_stock">
+            <field name="name">Prépa stockage => FR/STOCK</field>
+            <field name="sequence" eval="20"/>
+            <field name="active" eval="True"/>
+            <field name="action">move</field>
+            <field name="location_id" ref="stock_location_sirail_stock"/>
+            <field name="warehouse_id" ref="stock.warehouse0"/>
+            <field name="route_id" ref="stock_location_route_flux_nominal"/>
+            <field name="group_propagation_option">propagate</field>
+            <field name="propagate" eval="True"/>
+            <field name="picking_type_id" ref="stock_picking_type_rangement"/>
+            <field name="procure_method">make_to_stock</field>
+            <field name="location_src_id" ref="stock_location_sirail_prepa_stockage"/>
+            <field name="defer_picking_assign" eval="True"/>
+        </record>
+
+        <record model="procurement.rule" id="procurement_rule_dispatch_to_prepa">
+            <field name="name">Réception => Prépa</field>
+            <field name="active" eval="True"/>
+            <field name="action">move</field>
+            <field name="location_id" ref="stock_location_sirail_prepa"/>
+            <field name="warehouse_id"/>
+            <field name="route_id" ref="stock_location_route_flux_nominal"/>
+            <field name="group_propagation_option">propagate</field>
+            <field name="propagate" eval="True"/>
+            <field name="picking_type_id" ref="stock_picking_type_dispatch"/>
+            <field name="procure_method">make_to_stock</field>
+            <field name="location_src_id" ref="stock_location_sirail_reception"/>
+            <field name="defer_picking_assign" eval="True"/>
+        </record>
+
+        <!-- ############## Route principale d'approvisionnement SIRAIL TN ############## -->
+        <record model="stock.location.route" id="stock_location_route_flux_nominal_sicor">
+            <field name="name">Flux d'appro SIRAIL TN</field>
+            <field name="active" eval="True"/>
+            <field name="sequence">10</field>
+            <field name="product_categ_selectable"/>
+            <field name="product_selectable"/>
+            <field name="warehouse_selectable" eval="True"/>
+            <field name="company_id"/>
+        </record>
+
+        <record model="procurement.rule" id="procurement_rule_dispatch_to_stock_sicor">
+            <field name="name">SIRAIL TN: Réception => Stock</field>
+            <field name="active" eval="True"/>
+            <field name="action">move</field>
+            <field name="location_id" ref="stock_location_sicor_stock"/>
+            <field name="warehouse_id" ref="stock_warehouse_sicor"/>
+            <field name="route_id" ref="stock_location_route_flux_nominal_sicor"/>
+            <field name="group_propagation_option">propagate</field>
+            <field name="propagate" eval="True"/>
+            <field name="picking_type_id" ref="stock_picking_type_controle_qualite_sicor"/>
+            <field name="procure_method">make_to_stock</field>
+            <field name="location_src_id" ref="stock_location_sicor_reception"/>
+            <field name="defer_picking_assign" eval="True"/>
+        </record>
+
+        <!-- ############## Route principale d'approvisionnement SIRAIL SK ############## -->
+        <record model="stock.location.route" id="stock_location_route_flux_nominal_sk">
+            <field name="name">Flux d'appro SIRAIL SK</field>
+            <field name="active" eval="True"/>
+            <field name="sequence">10</field>
+            <field name="product_categ_selectable"/>
+            <field name="product_selectable"/>
+            <field name="warehouse_selectable" eval="True"/>
+            <field name="company_id"/>
+        </record>
+
+        <record model="procurement.rule" id="procurement_rule_dispatch_to_stock_sk">
+            <field name="name">SIRAIL SK: Réception => Stock</field>
+            <field name="active" eval="True"/>
+            <field name="action">move</field>
+            <field name="location_id" ref="stock_location_sk_stock"/>
+            <field name="warehouse_id" ref="stock_warehouse_sk"/>
+            <field name="route_id" ref="stock_location_route_flux_nominal_sk"/>
+            <field name="group_propagation_option">propagate</field>
+            <field name="propagate" eval="True"/>
+            <field name="picking_type_id" ref="stock_picking_type_controle_qualite_sk"/>
+            <field name="procure_method">make_to_stock</field>
+            <field name="location_src_id" ref="stock_location_sk_reception"/>
+            <field name="defer_picking_assign" eval="True"/>
+        </record>
+
+        <!-- ############## Route principale d'approvisionnement SIRAIL GB ############## -->
+        <record model="stock.location.route" id="stock_location_route_flux_nominal_gb">
+            <field name="name">Flux d'appro SIRAIL GB</field>
+            <field name="active" eval="True"/>
+            <field name="sequence">10</field>
+            <field name="product_categ_selectable"/>
+            <field name="product_selectable"/>
+            <field name="warehouse_selectable" eval="True"/>
+            <field name="company_id"/>
+        </record>
+
+        <record model="procurement.rule" id="procurement_rule_be_to_prepa_stockage_gb">
+            <field name="name">GB: Buffer Entrée => Dispatch</field>
+            <field name="active" eval="False"/>
+            <field name="action">move</field>
+            <field name="location_id" ref="stock_location_sirail_gb_dispatch"/>
+            <field name="warehouse_id"/>
+            <field name="route_id" ref="stock_location_route_flux_nominal_gb"/>
+            <field name="group_propagation_option">none</field>
+            <field name="propagate" eval="True"/>
+            <field name="picking_type_id" ref="stock_picking_type_gb_sirail_op_systeme"/>
+            <field name="procure_method">make_to_order</field>
+            <field name="auto_move" eval="True"/>
+            <field name="defer_picking_assign" eval="True"/>
+            <field name="location_src_id" ref="stock_location_sirail_gb_buffer_entree"/>
+        </record>
+
+        <record model="procurement.rule" id="procurement_rule_dispatch_to_stock_gb">
+            <field name="name">Prépa stockage => GB/STOCK</field>
+            <field name="active" eval="True"/>
+            <field name="action">move</field>
+            <field name="location_id" ref="stock_location_sirail_gb_stock"/>
+            <field name="warehouse_id" ref="stock_warehouse_gb"/>
+            <field name="route_id" ref="stock_location_route_flux_nominal_gb"/>
+            <field name="group_propagation_option">propagate</field>
+            <field name="propagate" eval="True"/>
+            <field name="picking_type_id" ref="stock_picking_type_gb_rangement"/>
+            <field name="procure_method">make_to_stock</field>
+            <field name="location_src_id" ref="stock_location_sirail_gb_prepa_stockage"/>
+            <field name="defer_picking_assign" eval="True"/>
+        </record>
+
+        <record model="procurement.rule" id="procurement_rule_dispatch_to_prepa_gb">
+            <field name="name">SIRAIL GB: Reception => Prépa</field>
+            <field name="active" eval="True"/>
+            <field name="action">move</field>
+            <field name="location_id" ref="stock_location_sirail_gb_prepa"/>
+            <field name="warehouse_id"/>
+            <field name="route_id" ref="stock_location_route_flux_nominal_gb"/>
+            <field name="group_propagation_option">propagate</field>
+            <field name="propagate" eval="True"/>
+            <field name="picking_type_id" ref="stock_picking_type_gb_dispatch"/>
+            <field name="procure_method">make_to_stock</field>
+            <field name="location_src_id" ref="stock_location_sirail_gb_reception"/>
+            <field name="defer_picking_assign" eval="True"/>
+        </record>
+
+    </data>
+</openerp>
