@@ -1,6 +1,16 @@
 import os as os
 import xml.sax
 
+#  record -> récupérer id et module, en utilisant les ids de type module.id
+#  a checker :
+#  les fields ref="id"
+#  les fields eval="[(4, ref('id
+#  dans les .py
+#  .browse_ref("id")
+#  .ref("id")
+#
+#  à chaque fois, construire la référence préfixée et vérifier qu'elle est dans la liste
+
 
 def main():
     print("starting...")
