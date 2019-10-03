@@ -1,3 +1,4 @@
+# -*- coding: utf8 -*-
 
 # (module, [modules...])
 # un module se positionne au dessous de tous les modules dont il dépend

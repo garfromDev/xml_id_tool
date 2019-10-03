@@ -1,3 +1,5 @@
+# -*- coding: utf8 -*-
+
 import os as os
 import xml.sax
 
