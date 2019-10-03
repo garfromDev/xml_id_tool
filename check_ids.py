@@ -42,9 +42,11 @@ class XmlObject(object):
     """
     def __init__(self, module="", id=""):
         if len(id.split('.')) < 2:
+            self.raw_id = id
             self.id = module + id  # a string, including or not module prefix
         else:
             self.id = id
+            self.raw_id = id.split('.')[-1]
         self.module = module
 
 class XmlError(object):
