@@ -7,9 +7,9 @@ import os.path
 import xml.sax
 
 field_map = [
-    ('name', None),
-    ('loc_barcode', None),
-    ('location_id', None),
+    ('name', u""),
+    ('loc_barcode', u""),
+    ('location_id', u""),
     ('removal_strategy_id', u""),
     ('active', u"True"),
     ('scrap_location', u"False"),
@@ -43,13 +43,12 @@ class IdHandler(xml.sax.ContentHandler):
             self.id = str(attrs.getValue('id'))
         if name == 'field' and self.recording:
             self.field = Field(name=attrs.getValue('name'))
-            print("beginning field %s" % self.field.name)
 
     def endElement(self, name):
         if name == 'field' and self.recording:
             self.fields[self.field.name] = self.field.value
         if name == 'record':
-            result = [self.id] + [self.fields.get(k, v) for k, v in self.field_map]
+            result = [self.id] + [self.fields.get(k) or v for k, v in self.field_map]
             self.csv_file.write((u",".join(result) + u"\n").decode('utf-8'))
 
     def characters(self, content):
@@ -58,17 +57,26 @@ class IdHandler(xml.sax.ContentHandler):
 
 
 def main():
-
-    fichier = io.open("sirail_locations.xml", 'r', encoding='utf-8')
-    csv_file = io.open("test.csv", 'w', encoding='utf-8')
+    if len(sys.argv) <= 3:
+        print(u"usage :\n  convert_xml_csv.py xml_file csv_file   will convert locations xml to csv\n")
+        return
+    xml_file_name = sys.argv[1]
+    csv_file_name = sys.argv[2]
     handler = IdHandler(csv_file=csv_file, field_map=field_map)
     inp_src = xml.sax.InputSource()
     inp_src.setEncoding('utf-8')
-    inp_src.setByteStream(fichier)
     parser = xml.sax.make_parser()
     parser.setContentHandler(handler)
+    if not os.path.exists(xml_file_name):
+        print(u"Fichier inexistant : %s" % xml_file_name)
+        return
     try:
+        fichier = io.open(xml_file_name, 'r', encoding='utf-8')
+        csv_file = io.open(csv_file_name, 'w+', encoding='utf-8')
+        inp_src.setByteStream(fichier)
         parser.parse(inp_src)
+    except IOError:
+        pass
     finally:
         fichier.close()
         csv_file.close()

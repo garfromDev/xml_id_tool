@@ -1,21 +1,36 @@
-# -*- coding: utf8 -*-
-
+#!/usr/bin/env python
 import os as os
+import sys
 import xml.sax
 
 
 def main():
-    print("starting...")
-
-    xml_ids, doublons = read_directory(['data/'])
-    print("%s xml id found with %s doublons" % (len(xml_ids), len(doublons)))
-    for id in doublons:
-        print(id)
+    if len(sys.argv) <= 1:
+        print("usage :\n  xmlid_tool.py directory   to list all ids in the directory\n"
+              "  xmlid_tool.py old_directory [new_directory] to compare ids in both directory")
+        return
+    dir1 = sys.argv[1]
+    if len(sys.argv) > 2:
+        dir2 = sys.argv[2]
+        solo_ids, missing_ids = compare([dir1], [dir2])
+        if len(missing_ids) > 0:
+            print("%s ids are either created or missing" % len(solo_ids))
+            print("%s ids missing in new data" % len(missing_ids))
+            for id in missing_ids:
+                print(id)
+        else:
+            print("no missing ids")
+            print("%s created " % len(solo_ids))
+    else:
+        xml_ids, doublons = read_directory([dir1])
+        for id in xml_ids:
+            print(id)
 
 def compare(dir1, dir2):
     ids1, doubl1 = read_directory(dir1)
     ids2, doubl2 = read_directory(dir2)
-    return set(ids2) ^ set(ids1)  # ids exists only in one of the 2 sets
+    s1, s2 = set(ids1), set(ids2)
+    return s1 ^ s2, s1 - s2  # ids exists only in one of the 2 sets, missing id in set2 compare to set 1
 
 def read_directory(dir_to_read):
     """
