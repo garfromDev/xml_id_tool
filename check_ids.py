@@ -1,5 +1,6 @@
 # -*- coding: utf8 -*-
 
+import json
 import os as os
 import re
 import xml.sax
@@ -18,6 +19,8 @@ import xml.sax
 
 def main():
     print("starting...")
+    a = Manifest(file_name='__openerp__.py')
+    return
     xml_ids, xml_override, errors = read_directory(['.'], module="sirail_config")
     print("%s xml id found with %s errors" % (len(xml_ids), len(errors)))
     for error in errors:
@@ -39,6 +42,26 @@ def read_directory(dir_to_read, module):
                 xml.sax.parse(fichier, handler)
     return handler.xml_ids, handler.override, handler.errors
 
+
+class Module(object):
+    def __init__(self, name):
+        self.name = name
+        self.files = []
+        self.depends = []
+
+
+class File(object):
+    def __init__(self, module, loaded_after=None, loaded_before=None):
+        self.loaded_after = loaded_after
+        self.loaded_before = loaded_before
+        self.module = module
+
+
+class Manifest(object):
+    def __init__(self, file_name):
+        with open(file_name, 'r') as mnfst
+            content = json.load(mnfst)
+            print content['depends']
 
 class XmlObject(object):
     """
