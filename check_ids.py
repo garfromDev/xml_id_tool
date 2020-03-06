@@ -39,7 +39,7 @@ from module import MANIFEST_NAMES
 #       créer le module si pas existant
 #       lier le module
 #    initialiser le namespace = namespace des modules dépendants
-#    parcourir les répertoires data/ et views/, dans l'ordre du manifestecréer les ids en notant le module et le fichier
+#    parcourir les répertoires data/ et views/, dans l'ordre du manifeste créer les ids en notant le module et le fichier
 #    parcourir aussi .py, noter les reférence (module, nom complet fichier, id du record, n° ligne?, texte de la référence, id cherché)
 #    maj au fur et a mesure le namespace du module += id crées dans le module
 #    vérifier présence des ref dans le namespace
@@ -48,6 +48,13 @@ from module import MANIFEST_NAMES
 #    noter l'ordre des fichiers
 
 #
+# Struture :
+#   ModuleNameTree contient la liste des ModuleInfo et fournit la fonction de scan de répertoire
+#   ModuleInfo contient les info d'identification d'un module, et  une méthode de fabrication à partir d'un répertoire
+#   ModuleTree contient le dictionnaire des module et la méthode récursive de vérification des modules (dépend de
+#       ModuleNameTree
+#
+#  ErrorCollector gère la compilation et le stockage des erreurs rencontrées
 
 ODOO_BASE = '/Users/alistef/PycharmProjects/odoo'
 
@@ -84,7 +91,7 @@ def analyze(base_dir, dir):
     print("%s modules found" % (len(info_tree.mod_infos) - nb))
 
     print(map(lambda kv: kv[0], info_tree.mod_name_path.iteritems()))
-    error_collector =ErrorCollector()
+    error_collector = ErrorCollector()
     module = ModuleTree(
         error_collector=error_collector,
         depndcy_provider=info_tree)
@@ -165,6 +172,8 @@ class ModuleNameTree(object):
 
 
 class ModuleInfo(object):
+    """ Information about a module (in term of name, path and other module dependancy"""
+
     def __init__(self, name, path, depends_name=[], data=[], code_files=[]):
         """
 
@@ -209,6 +218,8 @@ class ModuleInfo(object):
 
 
 class ErrorCollector(object):
+    """ Simple class to handle error, may be subclassed to used logging system or user display """
+
     def __init__(self):
         self.errors = []
 
@@ -220,9 +231,11 @@ class ErrorCollector(object):
 
 
 class ModuleTree(object):
+    """ the tree of module object (as a dictionary), handle the checking of ref validity during tree parsing
+        this is the main class
+    """
     def __init__(self, error_collector, depndcy_provider):
         """
-        Configure the Module class for use by Module instance
         :param error_collector: an object allowing to register XmlError objects
         :param depndcy_provider: an object allowing to get module info and dependant module for a given module name
         """
@@ -235,12 +248,32 @@ class ModuleTree(object):
         if not self.module_tree.get(mod_name, False):
             Module.module_tree = self.module_tree
             # the initialization of the Module will trigger the checking
-            self.module_tree[mod_name] = Module(name=mod_name,
+            self.module_tree[mod_name] = self.create_module(name=mod_name,
                                                 module_info=self.dpndcy_provider.get_module_info(mod_name))
 
     def check_all(self):
         for mod in self.dpndcy_provider.mod_name_path.keys:
             self.check(mod)
+
+    def create_module(self, name, module_info):
+        module = Module(name, module_info)
+        for mod_name in module_info.depends_name:
+            if not self.module_tree.get(mod_name, False):
+                #  create dependant module if not already existing
+                self.module_tree[mod_name] = self.create_module(name=mod_name,
+                                                      module_info=self.depndcy_provider.get_module_info(mod_name))
+            module.depends.append(self.module_tree[mod_name])
+            #  namespace of the module is union of dependant module's namespace
+            module.namespace.update(self.module_tree[mod_name].namespace)
+        # parse all files in /data and /views, enrich namspace and check Ids
+        # along
+        for fich in module_info.data:
+            handler = IdHandler(ids=self.namespace, module=name)
+            with open(os.path.join(module_info.path, fich), 'r') as data_fic:
+                xml.sax.parse(data_fic, handler)
+                module.namespace.update(handler.xml_ids)
+                self.error_collector.register(handler.errors)
+        return module
 
 
 class Module(object):
@@ -249,24 +282,8 @@ class Module(object):
         self.files = []
         self.depends = []
         self.module_info = module_info
+        # a dictionary of 
         self.namespace = {}
-
-        for mod_name in module_info.depends_name:
-            if not Module.module_tree.get(mod_name, False):
-                #  create dependant module if not already existing
-                Module.module_tree[mod_name] = Module(name=mod_name,
-                                                      module_info=Module.depndcy_provider.get_module_info(mod_name))
-            self.depends.append(Module.module_tree[mod_name])
-            #  namespace of the module is union of dependant module's namespace
-            self.namespace.update(Module.module_tree[mod_name].namespace)
-        # parse all files in /data and /views, enrich namspace and check Ids
-        # along
-        for fich in module_info.data:
-            handler = IdHandler(ids=self.namespace, module=name)
-            with open(os.path.join(module_info.path, fich), 'r') as data_fic:
-                xml.sax.parse(data_fic, handler)
-                self.namespace = handler.xml_ids
-                Module.error_collector.register(handler.errors)
 
 
 class File(object):
