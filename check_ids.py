@@ -1,9 +1,7 @@
 # -*- coding: utf8 -*-
 
-import functools
 import getopt
 import json
-import operator
 import os as os
 import re
 import xml.sax
@@ -39,8 +37,10 @@ from module import MANIFEST_NAMES
 #       créer le module si pas existant
 #       lier le module
 #    initialiser le namespace = namespace des modules dépendants
-#    parcourir les répertoires data/ et views/, dans l'ordre du manifeste créer les ids en notant le module et le fichier
-#    parcourir aussi .py, noter les reférence (module, nom complet fichier, id du record, n° ligne?, texte de la référence, id cherché)
+#    parcourir les répertoires data/ et views/, dans l'ordre du manifeste créer les ids en notant le module
+#    et le fichier
+#    parcourir aussi .py, noter les reférence (module, nom complet fichier, id du record, n° ligne?,
+#    texte de la référence, id cherché)
 #    maj au fur et a mesure le namespace du module += id crées dans le module
 #    vérifier présence des ref dans le namespace
 
@@ -68,6 +68,7 @@ def main(argv):
                 "help", "no-base", "base-directory="])
     except getopt.GetoptError:
         usage()
+        return 1
     base_dir = ODOO_BASE
     for o, a in opts:
         if o in ('-b', '--base-directory'):
@@ -80,23 +81,24 @@ def main(argv):
     analyze(base_dir, args[0])
 
 
-def analyze(base_dir, dir):
+def analyze(base_dir, dirctr):
     info_tree = ModuleNameTree()
+    nb = 0
     if base_dir:
         print("scanning odoo base")
         nb = len(info_tree.scan_directory(base_dir))
         print("%s modules found" % nb)
-    print("scanning %s" % dir)
-    info_tree.scan_directory(dir)
-    print("%s modules found" % (len(info_tree.mod_infos) - nb))
+    print("scanning %s" % dirctr)
+    info_tree.scan_directory(dirctr)
+    print("%s modules found" % (len(info_tree.mod_name_path) - nb))
 
     print(map(lambda kv: kv[0], info_tree.mod_name_path.iteritems()))
     error_collector = ErrorCollector()
-    module = ModuleTree(
+    mod = ModuleTree(
         error_collector=error_collector,
         depndcy_provider=info_tree)
     for name in info_tree.mod_name_path.keys():
-        module.check(name)
+        mod.check(name)
 
     return
     # a = Manifest(file_name='__openerp__.py')
@@ -105,7 +107,7 @@ def analyze(base_dir, dir):
     # print(info['depends'])
     return
     xml_ids, xml_override, errors = read_directory(
-        ['.'], module="sirail_config")
+        ['.'], odoo_module="sirail_config")
     print("%s xml id found with %s errors" % (len(xml_ids), len(errors)))
     for error in errors:
         print(error.description() + "\n")
@@ -125,28 +127,24 @@ def load_modules():
     pass
 
 
-def read_directory(dir_to_read, module):
+def read_directory(dir_to_read, odoo_module):
     """
     :param dir_to_read: list of directory to read
-    :module: module to which the directory belongs
+    :param odoo_module: module to which the directory belongs
     :return: list of unique ids, list of doublons
     """
     #  TODO : prendre les fichiers dans l'ordre du manifeste
-    handler = IdHandler(ids=[], module=module)
-    for dir in dir_to_read:
-        files = [f for f in os.listdir(dir) if f.split('.')[-1] == 'xml']
+    handler = IdHandler(ids=[], o_module=odoo_module)
+    for dirt in dir_to_read:
+        files = [f for f in os.listdir(dirt) if f.split('.')[-1] == 'xml']
         for f in files:
-            with open(os.path.join(dir, f), 'r') as fichier:
+            with open(os.path.join(dirt, f), 'r') as fichier:
                 xml.sax.parse(fichier, handler)
     return handler.xml_ids, handler.override, handler.errors
 
 
 class ModuleNameTree(object):
     def __init__(self):
-        """
-
-        :param mod_infos: [ModuleInfo]
-        """
         self.mod_name_path = {}
 
     def scan_directory(self, directory):
@@ -174,7 +172,8 @@ class ModuleNameTree(object):
 class ModuleInfo(object):
     """ Information about a module (in term of name, path and other module dependancy"""
 
-    def __init__(self, name, path, depends_name=[], data=[], code_files=[]):
+    def __init__(self, name, path, depends_name=None,
+                 data=None, code_files=None):
         """
 
         :param name: {string}
@@ -183,9 +182,9 @@ class ModuleInfo(object):
         """
         self.name = name
         self.path = path
-        self.depends_name = depends_name
-        self.data = data
-        self.code_files = code_files
+        self.depends_name = depends_name or []
+        self.data = data or []
+        self.code_files = code_files or []
 
     @classmethod
     def create_from_dir(cls, directory):
@@ -202,11 +201,11 @@ class ModuleInfo(object):
         name = os.path.basename(os.path.normpath(directory))
         py_files = []
 
-        for dir, _, files in os.walk(directory):
+        for dirt, _, files in os.walk(directory):
             for f_name in files:
                 if f_name.split(
                         '.')[-1] == 'py' and f_name not in MANIFEST_NAMES:
-                    py_files.append(os.path.join(os.path.abspath(dir), f_name))
+                    py_files.append(os.path.join(os.path.abspath(dirt), f_name))
         mod_descrpt = ModuleInfo(
             name=name,
             path=directory,
@@ -234,63 +233,64 @@ class ModuleTree(object):
     """ the tree of module object (as a dictionary), handle the checking of ref validity during tree parsing
         this is the main class
     """
+
     def __init__(self, error_collector, depndcy_provider):
         """
         :param error_collector: an object allowing to register XmlError objects
         :param depndcy_provider: an object allowing to get module info and dependant module for a given module name
         """
-        self.module_tree = {}
+        self.module_tree = {}  # a dictionary {name: Module, }
         self.error_collector = error_collector
         self.dpndcy_provider = depndcy_provider
 
     def check(self, mod_name):
+        """ check the id of a module, creating it if necessary"""
         # no need to check if the module has already been loaded and checked
         if not self.module_tree.get(mod_name, False):
-            Module.module_tree = self.module_tree
-            # the initialization of the Module will trigger the checking
             self.module_tree[mod_name] = self.create_module(name=mod_name,
-                                                module_info=self.dpndcy_provider.get_module_info(mod_name))
+                                                            module_info=self.dpndcy_provider.get_module_info(mod_name))
 
     def check_all(self):
         for mod in self.dpndcy_provider.mod_name_path.keys:
             self.check(mod)
 
     def create_module(self, name, module_info):
-        module = Module(name, module_info)
+        # the initialization of the Module will trigger the checking
+        new_module = Module(name, module_info)
         for mod_name in module_info.depends_name:
             if not self.module_tree.get(mod_name, False):
                 #  create dependant module if not already existing
-                self.module_tree[mod_name] = self.create_module(name=mod_name,
-                                                      module_info=self.depndcy_provider.get_module_info(mod_name))
-            module.depends.append(self.module_tree[mod_name])
+                self.module_tree[mod_name] =\
+                    self.create_module(name=mod_name, module_info=self.dpndcy_provider.get_module_info(mod_name))
+            new_module.depends.append(self.module_tree[mod_name])
             #  namespace of the module is union of dependant module's namespace
-            module.namespace.update(self.module_tree[mod_name].namespace)
+            new_module.namespace += self.module_tree[mod_name].namespace
         # parse all files in /data and /views, enrich namspace and check Ids
         # along
         for fich in module_info.data:
-            handler = IdHandler(ids=self.namespace, module=name)
+            handler = IdHandler(ids=new_module.namespace, o_module=name)
             with open(os.path.join(module_info.path, fich), 'r') as data_fic:
                 xml.sax.parse(data_fic, handler)
-                module.namespace.update(handler.xml_ids)
+                new_module.namespace.append(handler.xml_ids)
                 self.error_collector.register(handler.errors)
-        return module
+        return new_module
 
 
 class Module(object):
     def __init__(self, name, module_info):
         self.name = name
         self.files = []
-        self.depends = []
+        self.depends = []  # a list of dependent Module
         self.module_info = module_info
-        # a dictionary of 
-        self.namespace = {}
+        # a dictionary of
+        self.namespace = []  # a list of XmlObject
 
 
 class File(object):
-    def __init__(self, module, loaded_after=None, loaded_before=None):
+    def __init__(self, odoo_module, loaded_after=None, loaded_before=None):
         self.loaded_after = loaded_after
         self.loaded_before = loaded_before
-        self.module = module
+        self.module = odoo_module
 
 
 class Manifest(object):
@@ -300,45 +300,39 @@ class Manifest(object):
             print content['depends']
 
 
-class XmlObject(object):
-    """
-    object containg information about
-    """
-
-    def __init__(self, module="", id=""):
-        if len(id.split('.')) < 2:
-            self.raw_id = id
-            # a string, including or not module prefix
-            self.id = "%s.%s" % (module, id)
-        else:
-            self.id = id
-            self.raw_id = id.split('.')[-1]
-        self.module = module
-
-
 class XmlError(object):
-    def __init__(self, record, ref, text):
+    def __init__(self, record, ref, text, context):
         self.record = record
         self.ref = ref
         self.text = text
+        self.context = context
 
     def description(self):
-        return "%s not found in object %s \n expression %s" % (
-            self.ref, self.record.id, self.text)
+        return "%s not found in object %s in module %s\n expression %s" % (
+            self.ref, self.record, self.context, self.text)
+
+
+def _xml(o_module="", _id=""):
+    """ return fully qualified xml_id """
+    if len(_id.split('.')) < 2:
+        _id = "%s.%s" % (o_module, _id)
+    else:
+        _id = _id
+    return _id
 
 
 class IdHandler(xml.sax.ContentHandler):
-    def __init__(self, module, ids=[]):
+    def __init__(self, o_module, ids=None):
         """
         identify ids and add them to xml_ids
         check ref made to ids and reports errors if incorrect ref
-        :param module: string technical name of the module
+        :param o_module: string technical name of the module
         :param ids: [XMLObject]
         """
-        self.xml_ids = ids
+        self.xml_ids = ids or []  # a list of XmlObject
         self.override = []
         self.errors = []
-        self.module = module
+        self.module = o_module
         self.record = None
         self.text = ""
 
@@ -348,34 +342,34 @@ class IdHandler(xml.sax.ContentHandler):
     def startElement(self, name, attrs):
         self.text = ""
         if name == 'record':
-            id = attrs.getValue('id') if 'id' in attrs.getQNames() else False
-            if id:
-                self.record = XmlObject(module=self.module, id=id)
-                if id in [xml_id.id for xml_id in self.xml_ids]:
-                    self.override.append(XmlObject(module=self.module, id=id))
+            xid = attrs.getValue('id') if 'id' in attrs.getQNames() else False
+            if xid:
+                self.record = _xml(o_module=self.module, _id=xid)
+                if self.record in self.xml_ids:
+                    self.override.append(self.record)
                 else:
-                    self.xml_ids.append(XmlObject(module=self.module, id=id))
+                    self.xml_ids.append(self.record)
 
         if name == 'field':
             # traitement des champs ref="id"
             ref = attrs.getValue(
                 'ref') if 'ref' in attrs.getQNames() else False
             if ref:
-                link = XmlObject(id=ref, module=self.module)
+                link = _xml(_id=ref, o_module=self.module)
                 if link not in self.xml_ids:
                     self.errors.append(XmlError(record=self.record,
-                                                ref=ref,
-                                                text='ref="' + ref + '"'))
+                                                ref=ref, context=self.module,
+                                                text='ref="' + str(ref) + '"'))
             # traitement des expressions eval="[(4, ref('i
             evalstr = attrs.getValue(
                 'eval') if 'eval' in attrs.getQNames() else False
             regexp = re.compile(r".*, ref\((.*)\)", re.IGNORECASE)
             if evalstr:
                 link = regexp.match(evalstr)
-                if link and XmlObject(
-                        id=link, module=self.module) not in self.xml_ids:
+                if link and _xml(
+                        _id=link, o_module=self.module) not in self.xml_ids:
                     self.errors.append(XmlError(record=self.record,
-                                                ref=link,
+                                                ref=link, context=self.module,
                                                 text="eval='ref(" + link + "')"))
 
     def endElement(self, name):
