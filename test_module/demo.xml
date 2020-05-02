@@ -1,0 +1,9 @@
+<openerp>
+    <data>
+        <record model="truc" id="truc_de_test_module">
+            <field name="location_id" ref="xml_id_tool.stock_location_route_flux_nominal">
+                donne_test
+            </field>
+        </record>
+    </data>
+</openerp>
