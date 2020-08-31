@@ -2,7 +2,6 @@
 
 import argparse
 import csv
-import getopt
 import json
 import os as os
 import re
@@ -60,23 +59,37 @@ from module import MANIFEST_NAMES
 debug = True
 verbose = True
 
+
 def log(msg):
     if verbose or debug:
         print msg
+
 
 def detail(msg):
     if debug:
         print msg
 
+
 def main(argv):
     global verbose
     global debug
     detail("starting... with argv %s" % argv)
-    parser = argparse.ArgumentParser(description=u"Check xml ids validity in this directory")
-    parser.add_argument("directories", nargs='+', help=u"Directories to parse recursively")
+    parser = argparse.ArgumentParser(
+        description=u"Check xml ids validity in this directory")
+    parser.add_argument(
+        "directories",
+        nargs='+',
+        help=u"Directories to parse recursively")
     group = parser.add_mutually_exclusive_group()
-    group.add_argument("-b", "--base", help="Base directory of odoo, to include in ids")
-    group.add_argument("-f", "--nobase", help=u"No base directory", action="store_true")
+    group.add_argument(
+        "-b",
+        "--base",
+        help="Base directory of odoo, to include in ids")
+    group.add_argument(
+        "-f",
+        "--nobase",
+        help=u"No base directory",
+        action="store_true")
     parser.add_argument("-d", "--debug", action="store_true")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args()
@@ -106,18 +119,6 @@ def analyze(base_dir, dirctrs):
         log("checking module %s" % name)
         mod.check(name)
 
-    return
-    # a = Manifest(file_name='__openerp__.py')
-    # print(module.module_manifest('./test_module'))
-    # info = module.load_information_from_description_file('test_module', './test_module')
-    # print(info['depends'])
-    return
-    xml_ids, xml_override, errors = read_directory(
-        ['.'], odoo_module="sirail_config")
-    print("%s xml id found with %s errors" % (len(xml_ids), len(errors)))
-    for error in errors:
-        print(error.description() + "\n")
-
 
 def usage():
     print("\n USAGE\n -----")
@@ -141,7 +142,7 @@ def read_directory(dir_to_read, odoo_module):
         for f in files:
             with open(os.path.join(dirt, f), 'r') as fichier:
                 xml.sax.parse(fichier, handler)
-    return handler.xml_ids, handler.override, handler.errors
+    return handler.xml_ids, handler.override
 
 
 class ModuleNameTree(object):
@@ -167,7 +168,8 @@ class ModuleNameTree(object):
         return self.mod_name_path[name].depends_name if name in self.mod_name_path.keys else None
 
     def get_module_info(self, name):
-        return self.mod_name_path[name] if name in self.mod_name_path.keys() else None
+        return self.mod_name_path[name] if name in self.mod_name_path.keys(
+        ) else None
 
 
 class ModuleInfo(object):
@@ -206,7 +208,10 @@ class ModuleInfo(object):
             for f_name in files:
                 if f_name.split(
                         '.')[-1] == 'py' and f_name not in MANIFEST_NAMES:
-                    py_files.append(os.path.join(os.path.abspath(dirt), f_name))
+                    py_files.append(
+                        os.path.join(
+                            os.path.abspath(dirt),
+                            f_name))
         mod_descrpt = ModuleInfo(
             name=name,
             path=directory,
@@ -232,7 +237,7 @@ class ErrorCollector(object):
 
 class ModuleTree(object):
     """ the tree of module object (as a dictionary), handle the checking of ref validity during tree parsing
-    !!! need to create the tree first, check after because order of file inside a module is not restricted !!!!!
+    !!! TODO : ne pas checker base !!!!!
         this is the main class
     """
 
@@ -244,14 +249,38 @@ class ModuleTree(object):
         self.module_tree = {}  # a dictionary {name: Module, }
         self.error_collector = error_collector
         self.dpndcy_provider = depndcy_provider
+        for mod_name, mod_info in depndcy_provider.mod_name_path.iteritems():
+            # la creation d'un module entraine la creation des modeles dependants, donc
+            # on vérifie l'existance avant de le créer
+            if not self.module_tree.get(mod_name, None):
+                self.module_tree[mod_name] = self.create_module(
+                    name=mod_name, module_info=mod_info)
 
     def check(self, mod_name):
         """ check the id of a module, creating it if necessary"""
         # no need to check if the module has already been loaded and checked
-        if not self.module_tree.get(mod_name, False):
-            log("creating module %s" % mod_name)
-            self.module_tree[mod_name] = self.create_module(name=mod_name,
-                                                            module_info=self.dpndcy_provider.get_module_info(mod_name))
+        module_to_check = self.module_tree.get(mod_name, None)
+        if not module_to_check:
+            log("ERROR  module %s not found " % mod_name)
+            return
+
+        for fich in module_to_check.module_info.data:
+            handler = CheckerHandler(
+                ids=module_to_check.namespace,
+                o_module=mod_name,
+                locator=xml.sax.xmlreader.Locator())
+
+            with open(os.path.join(module_to_check.module_info.path, fich), 'r') as data_fic:
+                # splitext returns a tuple (path, ext)
+                ext = os.path.splitext(fich)[1]
+                log("parsing %s with extension %s" % (fich, ext))
+                errors = []
+                if ext == '.xml':
+                    detail("parsing xml")
+                    xml.sax.parse(data_fic, handler)
+                    errors = handler.errors
+                detail("found %s errors" % (len(errors)))
+                self.error_collector.register(errors)
 
     def check_all(self):
         for mod in self.dpndcy_provider.mod_name_path.keys:
@@ -265,29 +294,37 @@ class ModuleTree(object):
             if not self.module_tree.get(mod_name, False):
                 #  create dependant module if not already existing
                 self.module_tree[mod_name] =\
-                    self.create_module(name=mod_name, module_info=self.dpndcy_provider.get_module_info(mod_name))
+                    self.create_module(
+                    name=mod_name,
+                    module_info=self.dpndcy_provider.get_module_info(mod_name))
             new_module.depends.append(self.module_tree[mod_name])
             #  namespace of the module is union of dependant module's namespace
             new_module.namespace += self.module_tree[mod_name].namespace
         # parse all files in /data and /views, enrich namespace and check Ids
         # along
+        detail("actually feeding module %s" % name)
         for fich in module_info.data:
-            handler = IdHandler(ids=new_module.namespace, o_module=name, locator=xml.sax.xmlreader.Locator())
-
+            handler = IdHandler(
+                ids=new_module.namespace,
+                o_module=name,
+                locator=xml.sax.xmlreader.Locator())
             with open(os.path.join(module_info.path, fich), 'r') as data_fic:
-                ext = os.path.splitext(fich)[1]  # pliext returns a tuple (path, ext)
+                # pliext returns a tuple (path, ext)
+                ext = os.path.splitext(fich)[1]
                 log("parsing %s with extension %s" % (fich, ext))
                 if ext == '.xml':
                     detail("parsing xml")
                     xml.sax.parse(data_fic, handler)
-                    xml_ids, errors = handler.xml_ids, handler.errors
+                    xml_ids = handler.xml_ids
                 elif ext == '.csv':
                     detail('parsing csv')
                     csvparser = CsvParser(o_module=name, xml_ids=xml_ids)
-                    xml_ids, errors = csvparser.parse(data_fic)
-                detail("found %s ids / %s errors : %s..." % (len(xml_ids), len(errors), xml_ids[:5]))
+                    xml_ids, error = csvparser.parse(data_fic)
+                    if error:
+                        log("error parsing %s : %s" %
+                            (fich, map(lambda e: e.description(), error)))
+                detail("found %s ids : %s..." % (len(xml_ids), xml_ids[:5]))
                 new_module.namespace.append(xml_ids)
-                self.error_collector.register(errors)
         return new_module
 
 
@@ -312,7 +349,9 @@ class Manifest(object):
     def __init__(self, file_name):
         with open(file_name, 'r') as mnfst:
             content = json.load(mnfst)
-            detail("contenu du manifest %s :\n%s" % (file_name, content['depends']))
+            detail(
+                "contenu du manifest %s :\n%s" %
+                (file_name, content['depends']))
 
 
 class XmlError(object):
@@ -351,6 +390,7 @@ class CsvParser(object):
     Retrieve id definition is .csv file (column 'id')
     Does not care about reference to other id in other column
     """
+
     def __init__(self, o_module, xml_ids=None):
         """
         :param o_module: module name
@@ -368,26 +408,74 @@ class CsvParser(object):
         """
         reader = csv.DictReader(csv_file)
         errors = []
-        if csv.Sniffer().has_header(csv_file.read(1024)):
+
+        def has_header(extract):
+            try:
+                return csv.Sniffer().has_header(extract)
+            except csv.Error:
+                return extract[:4] == '"id"'
+
+        if has_header(csv_file.read(1024)):
+            csv_file.seek(0)
             for row in reader:
                 if row.get('id', False):
                     self.xml_ids.append(_xml(o_module=self.module,
-                                             _id=row['id']) )
+                                             _id=row['id']))
         else:
             errors.append(XmlError(record="", ref="", text="Csv file has no header", context=self.module,
-                               filename=csv_file.name))
+                                   filename=csv_file.name))
         return self.xml_ids, errors
 
-class IdHandler(xml.sax.ContentHandler):
+
+class IdHandler(object, xml.sax.ContentHandler):
     def __init__(self, o_module, ids=None, locator=None):
         """
         identify ids and add them to xml_ids
+        :param o_module: string technical name of the module
+        :param ids: [XMLObject]
+        """
+        super(IdHandler, self).__init__()
+        self.xml_ids = ids or []  # a list of XmlObject
+        self.override = []
+        self.module = o_module
+        self.record = None
+        self.text = ""
+        self.locator = locator
+
+    def setDocumentLocator(self, locator):
+        self.locator = locator
+
+    def startDocument(self):
+        pass
+
+    def startElement(self, name, attrs):
+        self.text = ""
+        if name == 'record':
+            xid = attrs.getValue('id') if 'id' in attrs.getQNames() else None
+            if xid:
+                self.record = _xml(o_module=self.module, _id=xid)
+                if self.record in self.xml_ids:
+                    self.override.append(self.record)
+                else:
+                    self.xml_ids.append(self.record)
+
+    def endElement(self, name):
+        if name == 'record':
+            self.record = None
+
+    def characters(self, content):
+        self.text += content
+
+
+class CheckerHandler(object, xml.sax.ContentHandler):
+    def __init__(self, o_module, ids=None, locator=None):
+        """
         check ref made to ids and reports errors if incorrect ref
         :param o_module: string technical name of the module
         :param ids: [XMLObject]
         """
+        super(CheckerHandler, self).__init__()
         self.xml_ids = ids or []  # a list of XmlObject
-        self.override = []
         self.errors = []
         self.module = o_module
         self.record = None
@@ -403,18 +491,14 @@ class IdHandler(xml.sax.ContentHandler):
     def startElement(self, name, attrs):
         self.text = ""
         if name == 'record':
-            xid = attrs.getValue('id') if 'id' in attrs.getQNames() else False
+            xid = attrs.getValue('id') if 'id' in attrs.getQNames() else None
             if xid:
                 self.record = _xml(o_module=self.module, _id=xid)
-                if self.record in self.xml_ids:
-                    self.override.append(self.record)
-                else:
-                    self.xml_ids.append(self.record)
 
         if name == 'field':
             # traitement des champs ref="id"
             ref = attrs.getValue(
-                'ref') if 'ref' in attrs.getQNames() else False
+                'ref') if 'ref' in attrs.getQNames() else None
             if ref:
                 link = _xml(_id=ref, o_module=self.module)
                 if link not in self.xml_ids:
@@ -425,8 +509,9 @@ class IdHandler(xml.sax.ContentHandler):
                                                 filename=self.locator.getSystemId()))
             # traitement des expressions eval="[(4, ref('i
             evalstr = attrs.getValue(
-                'eval') if 'eval' in attrs.getQNames() else False
-            # we use ungreedy .*? to avoid closing parenthesis to be included in match
+                'eval') if 'eval' in attrs.getQNames() else None
+            # we use ungreedy .*? to avoid closing parenthesis to be included
+            # in match
             regexp = re.compile(r".*, ref\('(.*?)'\)", re.IGNORECASE)
             if evalstr:
                 link = regexp.match(evalstr)
@@ -435,7 +520,7 @@ class IdHandler(xml.sax.ContentHandler):
                         _id=link, o_module=self.module) not in self.xml_ids:
                     self.errors.append(XmlError(record=self.record,
                                                 ref=link, context=self.module,
-                                                text="eval='ref(" + link + "')",
+                                                text="eval='ref(%s" % link + "')",
                                                 line=self.locator.getLineNumber(),
                                                 filename=self.locator.getSystemId()
                                                 )
@@ -450,5 +535,5 @@ class IdHandler(xml.sax.ContentHandler):
 
 
 if __name__ == '__main__':
-     main(sys.argv[1:])
+    main(sys.argv[1:])
     # main(['-d',  '-v' ,'-f',  '.'])
